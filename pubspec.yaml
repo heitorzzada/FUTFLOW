@@ -137,8 +137,6 @@ flutter:
   assets:
     - assets/fonts/
     - assets/images/
-    - assets/images/cortes/
-    - assets/images/cursos/
     - assets/videos/
     - assets/audios/
     - assets/rive_animations/
