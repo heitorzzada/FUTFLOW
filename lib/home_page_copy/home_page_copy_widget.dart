@@ -21,6 +21,7 @@ class HomePageCopyWidget extends StatefulWidget {
 
 class _HomePageCopyWidgetState extends State<HomePageCopyWidget> {
   late HomePageCopyModel _model;
+  bool _isLoading = false;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -29,8 +30,7 @@ class _HomePageCopyWidgetState extends State<HomePageCopyWidget> {
     super.initState();
     _model = createModel(context, () => HomePageCopyModel());
 
-    _model.eMailTextController ??=
-        TextEditingController(text: 'amapas@email.com');
+    _model.eMailTextController ??= TextEditingController();
     _model.eMailFocusNode ??= FocusNode();
 
     _model.senhaTextController ??= TextEditingController();
@@ -40,12 +40,166 @@ class _HomePageCopyWidgetState extends State<HomePageCopyWidget> {
   @override
   void dispose() {
     _model.dispose();
-
     super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    final email = _model.eMailTextController?.text.trim() ?? '';
+    final password = _model.senhaTextController?.text.trim() ?? '';
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: const [
+              Icon(Icons.warning_amber_rounded, color: Colors.white),
+              SizedBox(width: 10.0),
+              Expanded(child: Text('Por favor, preencha o e-mail e a senha.')),
+            ],
+          ),
+          backgroundColor: FlutterFlowTheme.of(context).error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      GoRouter.of(context).prepareAuthEvent();
+      final user = await authManager.signInWithEmail(
+        context,
+        email,
+        password,
+      );
+
+      if (!mounted) return;
+
+      if (user != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle_rounded, color: Colors.white),
+                SizedBox(width: 10.0),
+                Text('Bem-vindo de volta à Barbearia Delacruz!'),
+              ],
+            ),
+            backgroundColor: FlutterFlowTheme.of(context).success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        context.goNamedAuth(InicioWidget.routeName, context.mounted);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.error_outline_rounded, color: Colors.white),
+                SizedBox(width: 10.0),
+                Expanded(child: Text('E-mail ou senha incorretos. Verifique suas credenciais.')),
+              ],
+            ),
+            backgroundColor: FlutterFlowTheme.of(context).error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao realizar login: ${e.toString()}'),
+            backgroundColor: FlutterFlowTheme.of(context).error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _handleForgotPassword() async {
+    final email = _model.eMailTextController?.text.trim() ?? '';
+    final emailController = TextEditingController(text: email);
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+          title: Row(
+            children: [
+              Icon(Icons.lock_reset, color: FlutterFlowTheme.of(context).primary),
+              const SizedBox(width: 8.0),
+              Text(
+                'Redefinir Senha',
+                style: FlutterFlowTheme.of(context).titleMedium,
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Digite seu e-mail cadastrado para receber o link de recuperação de senha:',
+                style: FlutterFlowTheme.of(context).bodyMedium,
+              ),
+              const SizedBox(height: 16.0),
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Seu E-mail',
+                  prefixIcon: const Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.0)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text('Cancelar', style: TextStyle(color: FlutterFlowTheme.of(context).secondaryText)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: FlutterFlowTheme.of(context).primary,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+              ),
+              onPressed: () async {
+                final targetEmail = emailController.text.trim();
+                if (targetEmail.isEmpty) return;
+                Navigator.pop(dialogContext);
+                await authManager.resetPassword(email: targetEmail, context: context);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Instruções enviadas para $targetEmail'),
+                      backgroundColor: FlutterFlowTheme.of(context).info,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Enviar Link', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+
     return GestureDetector(
       onTap: () {
         FocusScope.of(context).unfocus();
@@ -53,366 +207,341 @@ class _HomePageCopyWidgetState extends State<HomePageCopyWidget> {
       },
       child: Scaffold(
         key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-        appBar: AppBar(
-          backgroundColor: Color(0xFFEE0004),
-          automaticallyImplyLeading: false,
-          leading: FlutterFlowIconButton(
-            borderColor: Colors.transparent,
-            borderRadius: 30.0,
-            borderWidth: 1.0,
-            buttonSize: 60.0,
-            icon: Icon(
-              Icons.arrow_back_rounded,
-              color: Colors.white,
-              size: 30.0,
-            ),
-            onPressed: () async {
-              context.pushNamed(InicioWidget.routeName);
-            },
-          ),
-          title: Text(
-            'LOGIN',
-            style: FlutterFlowTheme.of(context).headlineMedium.override(
-                  font: GoogleFonts.interTight(
-                    fontWeight:
-                        FlutterFlowTheme.of(context).headlineMedium.fontWeight,
-                    fontStyle:
-                        FlutterFlowTheme.of(context).headlineMedium.fontStyle,
-                  ),
-                  color: Colors.white,
-                  fontSize: 22.0,
-                  letterSpacing: 0.0,
-                  fontWeight:
-                      FlutterFlowTheme.of(context).headlineMedium.fontWeight,
-                  fontStyle:
-                      FlutterFlowTheme.of(context).headlineMedium.fontStyle,
-                ),
-          ),
-          actions: [],
-          centerTitle: true,
-          elevation: 2.0,
-        ),
+        backgroundColor: theme.primaryBackground,
         body: SafeArea(
-          top: true,
-          child: Column(
-            mainAxisSize: MainAxisSize.max,
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Align(
-                alignment: AlignmentDirectional(0.0, -1.0),
-                child: Text(
-                  'PREENCHA TODOS OS CAMPOS',
-                  textAlign: TextAlign.center,
-                  style: FlutterFlowTheme.of(context).bodyMedium.override(
-                        font: GoogleFonts.inter(
-                          fontWeight: FlutterFlowTheme.of(context)
-                              .bodyMedium
-                              .fontWeight,
-                          fontStyle:
-                              FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Top Bar with back button
+                    Row(
+                      children: [
+                        FlutterFlowIconButton(
+                          borderColor: theme.alternate,
+                          borderRadius: 24.0,
+                          borderWidth: 1.0,
+                          buttonSize: 44.0,
+                          fillColor: theme.secondaryBackground,
+                          icon: Icon(
+                            Icons.arrow_back_rounded,
+                            color: theme.primaryText,
+                            size: 20.0,
+                          ),
+                          onPressed: () async {
+                            context.goNamed(InicioWidget.routeName);
+                          },
                         ),
-                        letterSpacing: 0.0,
-                        fontWeight:
-                            FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                        fontStyle:
-                            FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                      ),
-                ),
-              ),
-              Container(
-                width: 375.0,
-                child: TextFormField(
-                  controller: _model.eMailTextController,
-                  focusNode: _model.eMailFocusNode,
-                  autofocus: false,
-                  enabled: true,
-                  obscureText: false,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    labelText: 'email',
-                    labelStyle:
-                        FlutterFlowTheme.of(context).labelMedium.override(
-                              font: GoogleFonts.inter(
-                                fontWeight: FlutterFlowTheme.of(context)
-                                    .labelMedium
-                                    .fontWeight,
-                                fontStyle: FlutterFlowTheme.of(context)
-                                    .labelMedium
-                                    .fontStyle,
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+                          decoration: BoxDecoration(
+                            color: theme.primary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(20.0),
+                            border: Border.all(color: theme.primary.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.content_cut_rounded, size: 14.0, color: theme.primary),
+                              const SizedBox(width: 6.0),
+                              Text(
+                                'DELACRUZ VIP',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11.0,
+                                  fontWeight: FontWeight.w700,
+                                  color: theme.primary,
+                                  letterSpacing: 1.0,
+                                ),
                               ),
-                              letterSpacing: 0.0,
-                              fontWeight: FlutterFlowTheme.of(context)
-                                  .labelMedium
-                                  .fontWeight,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                  .labelMedium
-                                  .fontStyle,
-                            ),
-                    hintText: 'NOME COMPLETO',
-                    hintStyle:
-                        FlutterFlowTheme.of(context).labelMedium.override(
-                              font: GoogleFonts.inter(
-                                fontWeight: FlutterFlowTheme.of(context)
-                                    .labelMedium
-                                    .fontWeight,
-                                fontStyle: FlutterFlowTheme.of(context)
-                                    .labelMedium
-                                    .fontStyle,
-                              ),
-                              letterSpacing: 0.0,
-                              fontWeight: FlutterFlowTheme.of(context)
-                                  .labelMedium
-                                  .fontWeight,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                  .labelMedium
-                                  .fontStyle,
-                            ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                        color: Color(0x00000000),
-                        width: 1.0,
-                      ),
-                      borderRadius: BorderRadius.circular(24.0),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                        color: Color(0x00000000),
-                        width: 1.0,
-                      ),
-                      borderRadius: BorderRadius.circular(24.0),
-                    ),
-                    errorBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                        color: FlutterFlowTheme.of(context).error,
-                        width: 1.0,
-                      ),
-                      borderRadius: BorderRadius.circular(24.0),
-                    ),
-                    focusedErrorBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                        color: FlutterFlowTheme.of(context).error,
-                        width: 1.0,
-                      ),
-                      borderRadius: BorderRadius.circular(24.0),
-                    ),
-                    filled: true,
-                    fillColor: FlutterFlowTheme.of(context).secondaryBackground,
-                  ),
-                  style: FlutterFlowTheme.of(context).bodyMedium.override(
-                        font: GoogleFonts.inter(
-                          fontWeight: FlutterFlowTheme.of(context)
-                              .bodyMedium
-                              .fontWeight,
-                          fontStyle:
-                              FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                            ],
+                          ),
                         ),
-                        letterSpacing: 0.0,
-                        fontWeight:
-                            FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                        fontStyle:
-                            FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                      ),
-                  textAlign: TextAlign.start,
-                  cursorColor: FlutterFlowTheme.of(context).primaryText,
-                  enableInteractiveSelection: true,
-                  validator:
-                      _model.eMailTextControllerValidator.asValidator(context),
-                ),
-              ),
-              Container(
-                width: 375.0,
-                child: TextFormField(
-                  controller: _model.senhaTextController,
-                  focusNode: _model.senhaFocusNode,
-                  autofocus: false,
-                  enabled: true,
-                  obscureText: !_model.senhaVisibility,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    labelText: 'SENHA',
-                    labelStyle:
-                        FlutterFlowTheme.of(context).labelMedium.override(
-                              font: GoogleFonts.inter(
-                                fontWeight: FlutterFlowTheme.of(context)
-                                    .labelMedium
-                                    .fontWeight,
-                                fontStyle: FlutterFlowTheme.of(context)
-                                    .labelMedium
-                                    .fontStyle,
-                              ),
-                              letterSpacing: 0.0,
-                              fontWeight: FlutterFlowTheme.of(context)
-                                  .labelMedium
-                                  .fontWeight,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                  .labelMedium
-                                  .fontStyle,
-                            ),
-                    hintStyle:
-                        FlutterFlowTheme.of(context).labelMedium.override(
-                              font: GoogleFonts.inter(
-                                fontWeight: FlutterFlowTheme.of(context)
-                                    .labelMedium
-                                    .fontWeight,
-                                fontStyle: FlutterFlowTheme.of(context)
-                                    .labelMedium
-                                    .fontStyle,
-                              ),
-                              letterSpacing: 0.0,
-                              fontWeight: FlutterFlowTheme.of(context)
-                                  .labelMedium
-                                  .fontWeight,
-                              fontStyle: FlutterFlowTheme.of(context)
-                                  .labelMedium
-                                  .fontStyle,
-                            ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                        color: Color(0x00000000),
-                        width: 1.0,
-                      ),
-                      borderRadius: BorderRadius.circular(24.0),
+                      ],
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                        color: Color(0x00000000),
-                        width: 1.0,
-                      ),
-                      borderRadius: BorderRadius.circular(24.0),
-                    ),
-                    errorBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                        color: FlutterFlowTheme.of(context).error,
-                        width: 1.0,
-                      ),
-                      borderRadius: BorderRadius.circular(24.0),
-                    ),
-                    focusedErrorBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                        color: FlutterFlowTheme.of(context).error,
-                        width: 1.0,
-                      ),
-                      borderRadius: BorderRadius.circular(24.0),
-                    ),
-                    filled: true,
-                    fillColor: FlutterFlowTheme.of(context).secondaryBackground,
-                    suffixIcon: InkWell(
-                      onTap: () async {
-                        safeSetState(() =>
-                            _model.senhaVisibility = !_model.senhaVisibility);
-                      },
-                      focusNode: FocusNode(skipTraversal: true),
-                      child: Icon(
-                        _model.senhaVisibility
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        size: 22,
-                      ),
-                    ),
-                  ),
-                  style: FlutterFlowTheme.of(context).bodyMedium.override(
-                        font: GoogleFonts.inter(
-                          fontWeight: FlutterFlowTheme.of(context)
-                              .bodyMedium
-                              .fontWeight,
-                          fontStyle:
-                              FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                        ),
-                        letterSpacing: 0.0,
-                        fontWeight:
-                            FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                        fontStyle:
-                            FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                      ),
-                  textAlign: TextAlign.start,
-                  cursorColor: FlutterFlowTheme.of(context).primaryText,
-                  enableInteractiveSelection: true,
-                  validator:
-                      _model.senhaTextControllerValidator.asValidator(context),
-                ),
-              ),
-              FFButtonWidget(
-                onPressed: () async {
-                  await authManager.refreshUser();
-                  GoRouter.of(context).prepareAuthEvent();
+                    const SizedBox(height: 24.0),
 
-                  final user = await authManager.signInWithEmail(
-                    context,
-                    _model.eMailTextController.text,
-                    _model.senhaTextController.text,
-                  );
-                  if (user == null) {
-                    return;
-                  }
-
-                  if (currentUserEmailVerified == false) {
-                    await showDialog(
-                      context: context,
-                      builder: (alertDialogContext) {
-                        return AlertDialog(
-                          title: Text('SUCESSO!'),
-                          content: Text('EMAIL E SENHA CORRETO'),
-                          actions: [
-                            TextButton(
-                              onPressed: () =>
-                                  Navigator.pop(alertDialogContext),
-                              child: Text('Ok'),
-                            ),
+                    // Logo Emblem
+                    Container(
+                      width: 88.0,
+                      height: 88.0,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            theme.primary,
+                            const Color(0xFF9A6B1F),
                           ],
-                        );
-                      },
-                    );
-
-                    context.pushNamedAuth(
-                        InicioWidget.routeName, context.mounted);
-                  } else {
-                    await showDialog(
-                      context: context,
-                      builder: (alertDialogContext) {
-                        return AlertDialog(
-                          title: Text('ERRO'),
-                          content: Text('SENHA OU EMAIL INCORRETO'),
-                          actions: [
-                            TextButton(
-                              onPressed: () =>
-                                  Navigator.pop(alertDialogContext),
-                              child: Text('Ok'),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  }
-                },
-                text: 'login',
-                options: FFButtonOptions(
-                  height: 40.0,
-                  padding: EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
-                  iconPadding:
-                      EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
-                  color: FlutterFlowTheme.of(context).primary,
-                  textStyle: FlutterFlowTheme.of(context).titleSmall.override(
-                        font: GoogleFonts.interTight(
-                          fontWeight: FlutterFlowTheme.of(context)
-                              .titleSmall
-                              .fontWeight,
-                          fontStyle:
-                              FlutterFlowTheme.of(context).titleSmall.fontStyle,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                        color: Colors.white,
-                        letterSpacing: 0.0,
-                        fontWeight:
-                            FlutterFlowTheme.of(context).titleSmall.fontWeight,
-                        fontStyle:
-                            FlutterFlowTheme.of(context).titleSmall.fontStyle,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.primary.withOpacity(0.35),
+                            blurRadius: 18.0,
+                            offset: const Offset(0.0, 8.0),
+                          ),
+                        ],
                       ),
-                  elevation: 0.0,
-                  borderRadius: BorderRadius.circular(8.0),
+                      child: const Center(
+                        child: Icon(
+                          Icons.content_cut_rounded,
+                          color: Colors.black87,
+                          size: 42.0,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16.0),
+
+                    // Titles
+                    Text(
+                      'BARBEARIA DELACRUZ',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.cinzel(
+                        fontSize: 22.0,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2.0,
+                        color: theme.primaryText,
+                      ),
+                    ),
+                    const SizedBox(height: 6.0),
+                    Text(
+                      'Entre na sua conta para agendar e gerenciar seus horários',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        fontSize: 14.0,
+                        color: theme.secondaryText,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 32.0),
+
+                    // Login Card Form
+                    Container(
+                      padding: const EdgeInsets.all(24.0),
+                      decoration: BoxDecoration(
+                        color: theme.secondaryBackground,
+                        borderRadius: BorderRadius.circular(24.0),
+                        border: Border.all(color: theme.alternate, width: 1.0),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 20.0,
+                            offset: const Offset(0.0, 10.0),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Email Field
+                          Text(
+                            'E-MAIL',
+                            style: GoogleFonts.inter(
+                              fontSize: 12.0,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.0,
+                              color: theme.secondaryText,
+                            ),
+                          ),
+                          const SizedBox(height: 8.0),
+                          TextFormField(
+                            controller: _model.eMailTextController,
+                            focusNode: _model.eMailFocusNode,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            style: theme.bodyMedium,
+                            decoration: InputDecoration(
+                              hintText: 'exemplo@email.com',
+                              hintStyle: TextStyle(color: theme.secondaryText.withOpacity(0.6)),
+                              prefixIcon: Icon(Icons.mail_outline_rounded, color: theme.primary, size: 20.0),
+                              filled: true,
+                              fillColor: theme.primaryBackground,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14.0),
+                                borderSide: BorderSide(color: theme.alternate),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14.0),
+                                borderSide: BorderSide(color: theme.primary, width: 2.0),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20.0),
+
+                          // Password Field
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'SENHA',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12.0,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.0,
+                                  color: theme.secondaryText,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: _handleForgotPassword,
+                                child: Text(
+                                  'Esqueceu a senha?',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12.0,
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8.0),
+                          TextFormField(
+                            controller: _model.senhaTextController,
+                            focusNode: _model.senhaFocusNode,
+                            obscureText: !_model.senhaVisibility,
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _handleLogin(),
+                            style: theme.bodyMedium,
+                            decoration: InputDecoration(
+                              hintText: 'Digite sua senha',
+                              hintStyle: TextStyle(color: theme.secondaryText.withOpacity(0.6)),
+                              prefixIcon: Icon(Icons.lock_outline_rounded, color: theme.primary, size: 20.0),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _model.senhaVisibility
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                  color: theme.secondaryText,
+                                  size: 20.0,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _model.senhaVisibility = !_model.senhaVisibility;
+                                  });
+                                },
+                              ),
+                              filled: true,
+                              fillColor: theme.primaryBackground,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14.0),
+                                borderSide: BorderSide(color: theme.alternate),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14.0),
+                                borderSide: BorderSide(color: theme.primary, width: 2.0),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24.0),
+
+                          // Login Button
+                          SizedBox(
+                            height: 52.0,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _handleLogin,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: theme.primary,
+                                foregroundColor: Colors.black,
+                                elevation: 4.0,
+                                shadowColor: theme.primary.withOpacity(0.4),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14.0),
+                                ),
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      width: 22.0,
+                                      height: 22.0,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                                      ),
+                                    )
+                                  : Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          'ENTRAR',
+                                          style: GoogleFonts.interTight(
+                                            fontSize: 15.0,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 1.0,
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8.0),
+                                        const Icon(Icons.arrow_forward_rounded, size: 18.0, color: Colors.black),
+                                      ],
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24.0),
+
+                    // Don't have account link
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Ainda não tem cadastro? ',
+                          style: GoogleFonts.inter(
+                            fontSize: 14.0,
+                            color: theme.secondaryText,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            context.pushNamed(HomePageWidget.routeName);
+                          },
+                          child: Text(
+                            'Criar conta',
+                            style: GoogleFonts.inter(
+                              fontSize: 14.0,
+                              fontWeight: FontWeight.w700,
+                              color: theme.primary,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16.0),
+
+                    // Guest explore button
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        context.goNamed(InicioWidget.routeName);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: theme.alternate),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14.0),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+                      ),
+                      icon: Icon(Icons.storefront_outlined, size: 18.0, color: theme.secondaryText),
+                      label: Text(
+                        'Explorar Serviços sem Login',
+                        style: GoogleFonts.inter(
+                          fontSize: 13.0,
+                          fontWeight: FontWeight.w600,
+                          color: theme.secondaryText,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ].divide(SizedBox(height: 20.0)).around(SizedBox(height: 20.0)),
+            ),
           ),
         ),
       ),
