@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "666873446268",
+    "project_id": "topicos-5f00d",
+    "storage_bucket": "topicos-5f00d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:666873446268:android:68ece25f3425689a7eeef9",
+        "android_client_info": {
+          "package_name": "com.mycompany.topicoespecial"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADQN4E1rXiautySHkDYdYRIjc9HJjTEuA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
